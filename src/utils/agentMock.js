@@ -336,13 +336,19 @@ async function simulateAgentStream(res, options) {
   store.updateConversation(conversationId, { session_id: sessionId });
 
   // 2. thinking イベント（ランダムで発生）
+  // 本家: progress(type="thinking") → thinking の2イベントをペアで送信
   if (Math.random() > 0.3) {
+    sse.sendSSE(res, 'progress', sse.formatProgressEvent('thinking', 'エージェントが思考中です...'));
+    await sleep(randInt(100, 200));
     sse.sendSSE(res, 'thinking', sse.formatThinkingEvent(pick(THINKING_PATTERNS)));
     await sleep(randInt(300, 800));
   }
 
   // 3. 最初のテキスト応答
+  // 本家: progress(type="generating") → assistant のペア
   const openingText = pick(OPENING_TEXTS);
+  sse.sendSSE(res, 'progress', sse.formatProgressEvent('generating', '応答を生成中です...'));
+  await sleep(randInt(50, 150));
   sse.sendSSE(res, 'assistant', sse.formatAssistantEvent([{ type: 'text', text: openingText }]));
   store.addMessageLog(conversationId, {
     message_type: 'assistant',
