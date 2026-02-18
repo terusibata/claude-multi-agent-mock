@@ -40,16 +40,6 @@ function formatInitEvent(sessionId, tools, model, conversationId) {
   };
 }
 
-function formatThinkingEvent(content, parentAgentId) {
-  const evt = {
-    seq: nextSeq(),
-    timestamp: getTimestamp(),
-    content,
-  };
-  if (parentAgentId) evt.parent_agent_id = parentAgentId;
-  return evt;
-}
-
 function formatAssistantEvent(contentBlocks, parentAgentId) {
   const evt = {
     seq: nextSeq(),
@@ -236,7 +226,6 @@ module.exports = {
   getTimestamp,
   sendSSE,
   formatInitEvent,
-  formatThinkingEvent,
   formatAssistantEvent,
   formatToolCallEvent,
   formatToolResultEvent,
