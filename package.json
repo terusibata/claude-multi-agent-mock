@@ -1,0 +1,16 @@
+{
+  "name": "claude-multi-agent-mock",
+  "version": "1.0.0",
+  "description": "claude-multi-agent API mock server (in-memory, Node.js)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "uuid": "^10.0.0"
+  }
+}
