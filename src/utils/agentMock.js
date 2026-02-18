@@ -51,7 +51,7 @@ function scenarioReadFile(conversationId) {
     toolName: 'Read',
     input: { file_path: `/workspace/${filename}` },
     summary: `${filename} を読み取り中...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `ファイル ${filename} の内容を読み取りました（${randInt(20, 200)}行）`,
     resultSummary: `${filename} の読み取り完了`,
     afterText: `\`${filename}\` の内容を確認しました。`,
@@ -89,7 +89,7 @@ function scenarioWriteFile(conversationId) {
     toolName: 'Write',
     input: { file_path: `/workspace/${target.name}`, content: '...' },
     summary: `${target.desc}を作成中...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${target.name} を作成しました（${sample.content.length} bytes）`,
     resultSummary: `${target.desc}の作成完了`,
     afterText: `\`${target.name}\` を作成しました。`,
@@ -114,7 +114,7 @@ function scenarioEditFile() {
     toolName: 'Edit',
     input: { file_path: `/workspace/${filename}`, old_string: '...', new_string: '...' },
     summary: `${filename} を編集中（${edit}）...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${filename}: ${edit}を適用しました`,
     resultSummary: `${filename} の編集完了`,
     afterText: `\`${filename}\` の${edit}が完了しました。`,
@@ -139,7 +139,7 @@ function scenarioBash() {
     toolName: 'Bash',
     input: { command: cmd.cmd },
     summary: cmd.desc,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: cmd.result,
     resultSummary: `コマンド実行完了: ${cmd.cmd}`,
     afterText: `\`${cmd.cmd}\` の実行が完了しました。`,
@@ -160,7 +160,7 @@ function scenarioGlob() {
     toolName: 'Glob',
     input: { pattern: p.pattern },
     summary: `${p.desc}を検索中...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${p.count}件のファイルが見つかりました（パターン: ${p.pattern}）`,
     resultSummary: `${p.count}件のファイルを検出`,
     afterText: `\`${p.pattern}\` で ${p.count}件のファイルが見つかりました。`,
@@ -182,7 +182,7 @@ function scenarioGrep() {
     toolName: 'Grep',
     input: { pattern: s.pattern, path: '/workspace' },
     summary: `${s.desc}を検索中...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${s.count}件のマッチが見つかりました（パターン: ${s.pattern}）`,
     resultSummary: `${s.count}件のマッチを検出`,
     afterText: `\`${s.pattern}\` の検索で ${s.count}件のマッチが見つかりました。`,
@@ -203,7 +203,7 @@ function scenarioWebSearch() {
     toolName: 'WebSearch',
     input: { query: q.q },
     summary: q.desc,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `検索結果: 5件の関連ドキュメントが見つかりました`,
     resultSummary: 'Web検索完了',
     afterText: `Web検索の結果をもとに情報を整理しました。`,
@@ -229,7 +229,7 @@ function scenarioTodoWrite() {
       })),
     },
     summary: 'タスクリストを作成中...',
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${taskList.length}件のタスクを作成しました`,
     resultSummary: 'タスクリスト作成完了',
     afterText: `作業計画をまとめました。${taskList.length}つのステップで進めます。`,
@@ -317,8 +317,8 @@ async function simulateAgentStream(res, options) {
   const toolSubset = AVAILABLE_TOOLS.slice(0, randInt(6, AVAILABLE_TOOLS.length));
   const toolNames = toolSubset.map(t => t.name);
 
-  // 1. session_start イベント
-  sse.sendSSE(res, 'session_start', sse.formatInitEvent(sessionId, toolNames, model, conversationId));
+  // 1. init イベント (ドキュメント仕様: event名は "init")
+  sse.sendSSE(res, 'init', sse.formatInitEvent(sessionId, toolNames, model, conversationId));
   await sleep(randInt(100, 300));
 
   // 会話にsession_idを紐付け
@@ -347,16 +347,16 @@ async function simulateAgentStream(res, options) {
     const scenario = generator(conversationId);
     toolScenarios.push(scenario);
 
-    // progress イベント
+    // progress イベント (type: "tool", tool_status: "running")
     sse.sendSSE(res, 'progress', sse.formatProgressEvent(
-      'tool_start',
+      'tool',
       scenario.summary,
       { tool_use_id: scenario.toolUseId, tool_name: scenario.toolName, tool_status: 'running' }
     ));
     await sleep(randInt(100, 250));
 
-    // tool_use イベント
-    sse.sendSSE(res, 'tool_use', sse.formatToolCallEvent(
+    // tool_call イベント (ドキュメント仕様: event名は "tool_call")
+    sse.sendSSE(res, 'tool_call', sse.formatToolCallEvent(
       scenario.toolUseId,
       scenario.toolName,
       scenario.input,
@@ -374,12 +374,12 @@ async function simulateAgentStream(res, options) {
     });
     await sleep(randInt(400, 1200));
 
-    // tool_result イベント
+    // tool_result イベント (status: "completed" | "error")
     const isError = Math.random() < 0.05; // 5%の確率でエラー
     sse.sendSSE(res, 'tool_result', sse.formatToolResultEvent(
       scenario.toolUseId,
       scenario.toolName,
-      isError ? 'error' : scenario.resultStatus,
+      isError ? 'error' : 'completed',
       isError ? 'ツールの実行中にエラーが発生しました。リトライします。' : scenario.resultContent,
       isError
     ));
@@ -390,7 +390,7 @@ async function simulateAgentStream(res, options) {
       content: {
         tool_use_id: scenario.toolUseId,
         tool_name: scenario.toolName,
-        status: isError ? 'error' : 'success',
+        status: isError ? 'error' : 'completed',
       },
     });
 
@@ -406,9 +406,9 @@ async function simulateAgentStream(res, options) {
       execution_time_ms: randInt(50, 2000),
     });
 
-    // progress 完了
+    // progress 完了 (type: "tool", tool_status: "completed" or "error")
     sse.sendSSE(res, 'progress', sse.formatProgressEvent(
-      'tool_end',
+      'tool',
       scenario.resultSummary || scenario.summary,
       { tool_use_id: scenario.toolUseId, tool_name: scenario.toolName, tool_status: isError ? 'error' : 'completed' }
     ));
