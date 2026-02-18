@@ -6,11 +6,11 @@
 const { v4: uuidv4 } = require('uuid');
 
 // 認証スキップするパス
-const SKIP_PATHS = ['/health', '/health/live', '/health/ready', '/metrics', '/docs', '/openapi.json'];
+const SKIP_PATHS = ['/', '/health', '/health/live', '/health/ready', '/metrics', '/docs', '/openapi.json'];
 
 function authMiddleware(req, res, next) {
   // ヘルスチェック等はスキップ
-  if (SKIP_PATHS.some(p => req.path.startsWith(p))) {
+  if (req.path === '/' || SKIP_PATHS.some(p => p !== '/' && req.path.startsWith(p))) {
     return next();
   }
 

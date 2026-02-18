@@ -23,12 +23,14 @@ router.get('/:conversation_id/files', (req, res) => {
     });
   }
 
+  // 本家: WorkspaceFileList = { conversation_id, files: [ConversationFileInfo], total_count, total_size }
   const files = store.getConversationFiles(req.params.conversation_id);
+  const totalSize = files.reduce((s, f) => s + (f.file_size || 0), 0);
   res.json({
     conversation_id: req.params.conversation_id,
-    workspace_enabled: conv.workspace_enabled,
     files,
-    total: files.length,
+    total_count: files.length,
+    total_size: totalSize,
   });
 });
 
@@ -111,11 +113,11 @@ router.get('/:conversation_id/files/presented', (req, res) => {
     });
   }
 
+  // 本家: PresentedFileList = { conversation_id, files: [ConversationFileInfo] }
   const files = store.getPresentedFiles(req.params.conversation_id);
   res.json({
     conversation_id: req.params.conversation_id,
     files,
-    total: files.length,
   });
 });
 

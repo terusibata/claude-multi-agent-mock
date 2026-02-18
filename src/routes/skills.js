@@ -19,18 +19,18 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/tenants/:tenant_id/skills/slash-commands - スラッシュコマンド一覧
+// 本家: SlashCommandListResponse = { items: [{ skill_id, name, slash_command, description }] }
 router.get('/slash-commands', (req, res) => {
   const skills = store.listSkills(req.params.tenant_id, { status: 'active' });
-  const commands = skills
+  const items = skills
     .filter(s => s.slash_command)
     .map(s => ({
       skill_id: s.skill_id,
+      name: s.name,
       slash_command: s.slash_command,
-      slash_command_description: s.slash_command_description,
-      display_title: s.display_title,
-      is_user_selectable: s.is_user_selectable,
+      description: s.slash_command_description || null,
     }));
-  res.json({ slash_commands: commands });
+  res.json({ items });
 });
 
 // GET /api/tenants/:tenant_id/skills/:skill_id - スキル取得
@@ -126,6 +126,7 @@ router.put('/:skill_id/files', upload.array('files', 20), (req, res) => {
 });
 
 // GET /api/tenants/:tenant_id/skills/:skill_id/files - ファイル一覧
+// 本家: SkillFilesResponse = { skill_id, skill_name, files: [{ filename, path, size, modified_at }] }
 router.get('/:skill_id/files', (req, res) => {
   const skill = store.getSkill(req.params.skill_id);
   if (!skill || skill.tenant_id !== req.params.tenant_id) {
@@ -139,10 +140,12 @@ router.get('/:skill_id/files', (req, res) => {
     });
   }
   const files = Object.keys(skill._files).map(name => ({
-    name,
+    filename: name,
+    path: `${skill.file_path}${name}`,
     size: Buffer.byteLength(skill._files[name], 'utf-8'),
+    modified_at: skill.updated_at,
   }));
-  res.json({ files });
+  res.json({ skill_id: skill.skill_id, skill_name: skill.name, files });
 });
 
 // GET /api/tenants/:tenant_id/skills/:skill_id/files/:file_path - ファイル内容取得

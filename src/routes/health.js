@@ -8,19 +8,20 @@ const router = Router();
 const startTime = Date.now();
 
 // GET /health - 詳細ヘルスチェック
+// 本家: HealthResponse = { status, version, environment, timestamp, checks: { [name]: ComponentHealth } }
+// ComponentHealth = { status: "healthy"|"degraded"|"unhealthy", message: str|null, latency_ms: float|null }
 router.get('/', (req, res) => {
-  const uptimeMs = Date.now() - startTime;
   res.json({
     status: 'healthy',
-    uptime_seconds: Math.floor(uptimeMs / 1000),
-    checks: {
-      database: { status: 'ok', latency_ms: 1 },       // モック: 常にOK
-      redis: { status: 'ok', latency_ms: 0 },           // モック: 常にOK
-      s3: { status: 'ok', latency_ms: 2 },              // モック: 常にOK
-      container_system: { status: 'ok', active_containers: 0, warm_pool_size: 3 },
-    },
     version: '1.0.0-mock',
     environment: 'development',
+    timestamp: new Date().toISOString(),
+    checks: {
+      database: { status: 'healthy', message: null, latency_ms: 1.2 },
+      redis: { status: 'healthy', message: null, latency_ms: 0.5 },
+      s3: { status: 'healthy', message: null, latency_ms: 2.1 },
+      container_system: { status: 'healthy', message: 'WarmPool: 3コンテナ待機中', latency_ms: 0.8 },
+    },
   });
 });
 
