@@ -51,7 +51,7 @@ router.get('/:server_id', (req, res) => {
 
 // POST /api/tenants/:tenant_id/mcp-servers - MCP作成
 router.post('/', (req, res) => {
-  const { name, openapi_spec } = req.body;
+  const { name, openapi_spec } = req.body || {};
   if (!name || !openapi_spec) {
     return res.status(422).json({
       error: {

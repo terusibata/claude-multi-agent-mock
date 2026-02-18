@@ -27,7 +27,7 @@ router.get('/', (req, res) => {
 
 // POST /api/tenants/:tenant_id/conversations - 会話作成
 router.post('/', (req, res) => {
-  const { user_id, model_id, workspace_enabled } = req.body;
+  const { user_id, model_id, workspace_enabled } = req.body || {};
   if (!user_id) {
     return res.status(422).json({
       error: {
@@ -95,7 +95,7 @@ router.put('/:conversation_id', (req, res) => {
       },
     });
   }
-  const { title, status } = req.body;
+  const { title, status } = req.body || {};
   const updated = store.updateConversation(req.params.conversation_id, { title, status });
   res.json(updated);
 });
