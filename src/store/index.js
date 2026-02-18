@@ -385,11 +385,13 @@ class Store {
   addConversationFile(conversationId, fileInfo) {
     const files = this.conversationFiles.get(conversationId);
     if (!files) return null;
+    const now = new Date().toISOString();
     const file = {
       file_id: uuidv4(),
       conversation_id: conversationId,
       file_path: fileInfo.file_path,
       original_name: fileInfo.original_name,
+      original_relative_path: fileInfo.original_relative_path || null,
       file_size: fileInfo.file_size || 0,
       mime_type: fileInfo.mime_type || 'application/octet-stream',
       version: 1,
@@ -397,7 +399,8 @@ class Store {
       is_presented: fileInfo.is_presented || false,
       checksum: fileInfo.checksum || null,
       description: fileInfo.description || null,
-      created_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
       // 内部用: 実際のコンテンツ(バイナリまたは文字列)
       _content: fileInfo._content || null,
     };

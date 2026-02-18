@@ -40,6 +40,15 @@ app.use(authMiddleware);
 // ========= ルート登録 =========
 // 本家と同じパスプレフィックス
 
+// ルートエンドポイント (認証不要 - middleware でスキップ済み)
+app.get('/', (req, res) => {
+  res.json({
+    name: 'AIエージェントバックエンド',
+    version: '1.0.0-mock',
+    docs_url: null,
+  });
+});
+
 // ヘルスチェック (認証不要 - middleware でスキップ済み)
 app.use('/health', healthRouter);
 

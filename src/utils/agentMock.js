@@ -26,18 +26,30 @@ function sleep(ms) {
 }
 
 // ========= ツール定義 =========
-const AVAILABLE_TOOLS = [
-  { name: 'Read', description: 'ファイルの読み取り' },
-  { name: 'Write', description: 'ファイルの書き込み' },
-  { name: 'Edit', description: 'ファイルの編集' },
-  { name: 'Bash', description: 'コマンドの実行' },
-  { name: 'Glob', description: 'ファイルパターン検索' },
-  { name: 'Grep', description: 'テキスト検索' },
-  { name: 'WebSearch', description: 'Web検索' },
-  { name: 'WebFetch', description: 'Webコンテンツ取得' },
-  { name: 'Task', description: 'サブエージェント起動' },
-  { name: 'TodoWrite', description: 'タスクリスト管理' },
-  { name: 'NotebookEdit', description: 'Jupyter Notebook編集' },
+// ビルトインSDKツール
+const SDK_TOOLS = [
+  'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep',
+  'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
+];
+
+// ビルトインMCPサーバーツール (mcp__server__tool 形式)
+const BUILTIN_MCP_TOOLS = [
+  'mcp__file-tools__list_workspace_files',
+  'mcp__file-tools__read_image_file',
+  'mcp__file-tools__get_sheet_info',
+  'mcp__file-tools__get_sheet_csv',
+  'mcp__file-tools__search_workbook',
+  'mcp__file-tools__inspect_pdf_file',
+  'mcp__file-tools__read_pdf_pages',
+  'mcp__file-tools__convert_pdf_to_images',
+  'mcp__file-tools__get_document_info',
+  'mcp__file-tools__get_document_content',
+  'mcp__file-tools__search_document',
+  'mcp__file-tools__get_presentation_info',
+  'mcp__file-tools__get_slides_content',
+  'mcp__file-tools__search_presentation',
+  'mcp__file-tools__inspect_image_file',
+  'mcp__file-presentation__present_files',
 ];
 
 // ========= ツール使用シナリオ =========
@@ -51,10 +63,10 @@ function scenarioReadFile(conversationId) {
     toolName: 'Read',
     input: { file_path: `/workspace/${filename}` },
     summary: `${filename} を読み取り中...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `ファイル ${filename} の内容を読み取りました（${randInt(20, 200)}行）`,
     resultSummary: `${filename} の読み取り完了`,
-    afterText: `\`${filename}\` の内容を確認しました。`,
+    createsFile: false,
   };
 }
 
@@ -72,7 +84,7 @@ function scenarioWriteFile(conversationId) {
   const target = pick(targets);
   const toolUseId = uuidv4();
 
-  // ファイルをストアに追加
+  // ファイルをストアに追加 (present_files 呼び出し後に is_presented=true にする)
   const sample = getSampleFile(target.name);
   store.addConversationFile(conversationId, {
     file_path: target.name,
@@ -80,7 +92,7 @@ function scenarioWriteFile(conversationId) {
     file_size: sample.content.length,
     mime_type: sample.mime_type,
     source: 'ai_created',
-    is_presented: true,
+    is_presented: false,
     _content: sample.content,
   });
 
@@ -89,11 +101,11 @@ function scenarioWriteFile(conversationId) {
     toolName: 'Write',
     input: { file_path: `/workspace/${target.name}`, content: '...' },
     summary: `${target.desc}を作成中...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${target.name} を作成しました（${sample.content.length} bytes）`,
     resultSummary: `${target.desc}の作成完了`,
-    afterText: `\`${target.name}\` を作成しました。`,
-    createdFile: target.name,
+    createsFile: true,
+    createdFilePath: target.name,
   };
 }
 
@@ -114,10 +126,11 @@ function scenarioEditFile() {
     toolName: 'Edit',
     input: { file_path: `/workspace/${filename}`, old_string: '...', new_string: '...' },
     summary: `${filename} を編集中（${edit}）...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${filename}: ${edit}を適用しました`,
     resultSummary: `${filename} の編集完了`,
-    afterText: `\`${filename}\` の${edit}が完了しました。`,
+    createsFile: true,
+    createdFilePath: filename,
   };
 }
 
@@ -139,10 +152,10 @@ function scenarioBash() {
     toolName: 'Bash',
     input: { command: cmd.cmd },
     summary: cmd.desc,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: cmd.result,
     resultSummary: `コマンド実行完了: ${cmd.cmd}`,
-    afterText: `\`${cmd.cmd}\` の実行が完了しました。`,
+    createsFile: false,
   };
 }
 
@@ -160,10 +173,10 @@ function scenarioGlob() {
     toolName: 'Glob',
     input: { pattern: p.pattern },
     summary: `${p.desc}を検索中...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${p.count}件のファイルが見つかりました（パターン: ${p.pattern}）`,
     resultSummary: `${p.count}件のファイルを検出`,
-    afterText: `\`${p.pattern}\` で ${p.count}件のファイルが見つかりました。`,
+    createsFile: false,
   };
 }
 
@@ -182,31 +195,10 @@ function scenarioGrep() {
     toolName: 'Grep',
     input: { pattern: s.pattern, path: '/workspace' },
     summary: `${s.desc}を検索中...`,
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${s.count}件のマッチが見つかりました（パターン: ${s.pattern}）`,
     resultSummary: `${s.count}件のマッチを検出`,
-    afterText: `\`${s.pattern}\` の検索で ${s.count}件のマッチが見つかりました。`,
-  };
-}
-
-function scenarioWebSearch() {
-  const queries = [
-    { q: 'React useEffect best practices 2025', desc: 'React ベストプラクティスを調査中' },
-    { q: 'FastAPI streaming SSE implementation', desc: 'FastAPIのSSE実装を調査中' },
-    { q: 'Docker multi-stage build optimization', desc: 'Dockerビルド最適化を調査中' },
-    { q: 'PostgreSQL indexing strategy large tables', desc: 'PostgreSQLインデックス戦略を調査中' },
-  ];
-  const q = pick(queries);
-  const toolUseId = uuidv4();
-  return {
-    toolUseId,
-    toolName: 'WebSearch',
-    input: { query: q.q },
-    summary: q.desc,
-    resultStatus: 'success',
-    resultContent: `検索結果: 5件の関連ドキュメントが見つかりました`,
-    resultSummary: 'Web検索完了',
-    afterText: `Web検索の結果をもとに情報を整理しました。`,
+    createsFile: false,
   };
 }
 
@@ -229,10 +221,117 @@ function scenarioTodoWrite() {
       })),
     },
     summary: 'タスクリストを作成中...',
-    resultStatus: 'success',
+    resultStatus: 'completed',
     resultContent: `${taskList.length}件のタスクを作成しました`,
     resultSummary: 'タスクリスト作成完了',
-    afterText: `作業計画をまとめました。${taskList.length}つのステップで進めます。`,
+    createsFile: false,
+  };
+}
+
+// ========= MCP ツールシナリオ =========
+
+function scenarioMcpFileTools(conversationId) {
+  const scenarios = [
+    {
+      tool: 'mcp__file-tools__list_workspace_files',
+      input: { filter_type: 'all' },
+      summary: 'ワークスペースのファイル一覧を取得中...',
+      result: '12件のファイルが見つかりました（.py: 4, .ts: 3, .json: 2, .md: 2, .csv: 1）',
+      resultSummary: 'ファイル一覧取得完了',
+    },
+    {
+      tool: 'mcp__file-tools__get_sheet_info',
+      input: { file_path: 'data.xlsx' },
+      summary: 'Excelシート情報を取得中...',
+      result: 'シート数: 3（Sheet1: 150行×8列, Sheet2: 50行×5列, Summary: 10行×3列）',
+      resultSummary: 'Excelシート情報取得完了',
+    },
+    {
+      tool: 'mcp__file-tools__get_sheet_csv',
+      input: { file_path: 'data.xlsx', sheet_name: 'Sheet1' },
+      summary: 'ExcelデータをCSV形式で取得中...',
+      result: 'Sheet1のデータを取得しました（150行×8列）',
+      resultSummary: 'Excelデータ取得完了',
+    },
+    {
+      tool: 'mcp__file-tools__inspect_pdf_file',
+      input: { file_path: 'report.pdf' },
+      summary: 'PDFファイルを解析中...',
+      result: 'ページ数: 15, テキスト抽出可能, 画像: 3枚',
+      resultSummary: 'PDF解析完了',
+    },
+    {
+      tool: 'mcp__file-tools__read_pdf_pages',
+      input: { file_path: 'report.pdf', start_page: 1, end_page: 3 },
+      summary: 'PDFページを読み取り中...',
+      result: '3ページ分のテキストを抽出しました（約2,400文字）',
+      resultSummary: 'PDFページ読み取り完了',
+    },
+    {
+      tool: 'mcp__file-tools__get_document_content',
+      input: { file_path: 'specification.docx' },
+      summary: 'Wordドキュメントの内容を取得中...',
+      result: 'ドキュメント内容を取得しました（セクション: 5, 段落: 42, 表: 3）',
+      resultSummary: 'Wordドキュメント取得完了',
+    },
+    {
+      tool: 'mcp__file-tools__get_presentation_info',
+      input: { file_path: 'slides.pptx' },
+      summary: 'PowerPointプレゼンテーション情報を取得中...',
+      result: 'スライド数: 20, テキスト付きスライド: 18, 画像付きスライド: 12',
+      resultSummary: 'プレゼンテーション情報取得完了',
+    },
+    {
+      tool: 'mcp__file-tools__inspect_image_file',
+      input: { file_path: 'chart.png' },
+      summary: '画像ファイルを解析中...',
+      result: 'PNG画像, 1920x1080px, 24bit RGB, サイズ: 245KB',
+      resultSummary: '画像解析完了',
+    },
+  ];
+  const s = pick(scenarios);
+  const toolUseId = uuidv4();
+  return {
+    toolUseId,
+    toolName: s.tool,
+    input: s.input,
+    summary: s.summary,
+    resultStatus: 'completed',
+    resultContent: s.result,
+    resultSummary: s.resultSummary,
+    createsFile: false,
+  };
+}
+
+function scenarioMcpCustomServer(conversationId) {
+  // テナントに登録されているカスタムMCPサーバーのツールをシミュレート
+  const scenarios = [
+    {
+      tool: 'mcp__servicenow__listIncidents',
+      input: { query: 'priority=1', limit: 10 },
+      summary: 'ServiceNowから高優先度インシデントを取得中...',
+      result: '5件の高優先度インシデントが見つかりました（P1: 2件, P2: 3件）',
+      resultSummary: 'ServiceNowインシデント取得完了',
+    },
+    {
+      tool: 'mcp__servicenow__createIncident',
+      input: { short_description: 'API応答遅延の調査', priority: 2 },
+      summary: 'ServiceNowにインシデントを作成中...',
+      result: 'インシデント INC0012345 を作成しました',
+      resultSummary: 'ServiceNowインシデント作成完了',
+    },
+  ];
+  const s = pick(scenarios);
+  const toolUseId = uuidv4();
+  return {
+    toolUseId,
+    toolName: s.tool,
+    input: s.input,
+    summary: s.summary,
+    resultStatus: 'completed',
+    resultContent: s.result,
+    resultSummary: s.resultSummary,
+    createsFile: false,
   };
 }
 
@@ -263,8 +362,9 @@ const SCENARIO_GENERATORS = [
   scenarioBash,
   scenarioGlob,
   scenarioGrep,
-  scenarioWebSearch,
   scenarioTodoWrite,
+  scenarioMcpFileTools,
+  scenarioMcpCustomServer,
 ];
 
 // ========= 応答テキストパターン =========
@@ -294,6 +394,70 @@ const MIDDLE_TEXTS = [
 ];
 
 /**
+ * ファイル作成/編集後に mcp__file-presentation__present_files を呼び出す
+ * (本家の動作: ファイル操作後は必ずユーザーに提示する)
+ */
+async function emitPresentFilesEvent(res, conversationId, sessionId, filePaths) {
+  const presentToolUseId = uuidv4();
+  const toolName = 'mcp__file-presentation__present_files';
+
+  // progress (running)
+  sse.sendSSE(res, 'progress', sse.formatProgressEvent(
+    'tool',
+    'ファイルをユーザーに提示中...',
+    { tool_use_id: presentToolUseId, tool_name: toolName, tool_status: 'running' }
+  ));
+  await sleep(randInt(50, 150));
+
+  // tool_call
+  sse.sendSSE(res, 'tool_call', sse.formatToolCallEvent(
+    presentToolUseId,
+    toolName,
+    { file_paths: filePaths },
+    'ファイルを提示'
+  ));
+  await sleep(randInt(100, 300));
+
+  // ストア内のファイルを is_presented=true に更新
+  for (const filePath of filePaths) {
+    const file = store.getConversationFile(conversationId, filePath);
+    if (file) {
+      file.is_presented = true;
+    }
+  }
+
+  // tool_result
+  sse.sendSSE(res, 'tool_result', sse.formatToolResultEvent(
+    presentToolUseId,
+    toolName,
+    'completed',
+    `${filePaths.length}件のファイルを提示しました: ${filePaths.join(', ')}`,
+    false
+  ));
+
+  // progress (completed)
+  sse.sendSSE(res, 'progress', sse.formatProgressEvent(
+    'tool',
+    'ファイル提示完了',
+    { tool_use_id: presentToolUseId, tool_name: toolName, tool_status: 'completed' }
+  ));
+
+  // ツールログ
+  store.addToolLog({
+    session_id: sessionId,
+    conversation_id: conversationId,
+    tool_name: toolName,
+    tool_use_id: presentToolUseId,
+    tool_input: { file_paths: filePaths },
+    tool_output: `${filePaths.length}件提示`,
+    status: 'completed',
+    execution_time_ms: randInt(10, 100),
+  });
+
+  await sleep(randInt(50, 150));
+}
+
+/**
  * メインのストリーミングシミュレーション
  *
  * @param {object} res - Express レスポンスオブジェクト（SSE）
@@ -313,12 +477,22 @@ async function simulateAgentStream(res, options) {
   const sessionId = existingSessionId || `session-${uuidv4().slice(0, 8)}`;
   const startTime = Date.now();
 
-  // 使用するツールリスト（ランダムにサブセット）
-  const toolSubset = AVAILABLE_TOOLS.slice(0, randInt(6, AVAILABLE_TOOLS.length));
-  const toolNames = toolSubset.map(t => t.name);
+  // テナントのMCPサーバーツール名を取得
+  const mcpServers = store.listMcpServers(tenantId, { status: 'active' });
+  const customMcpTools = [];
+  for (const server of mcpServers.items) {
+    if (server.allowed_tools) {
+      for (const tool of server.allowed_tools) {
+        customMcpTools.push(`mcp__${server.name}__${tool}`);
+      }
+    }
+  }
 
-  // 1. session_start イベント
-  sse.sendSSE(res, 'session_start', sse.formatInitEvent(sessionId, toolNames, model, conversationId));
+  // init イベントのツール一覧: SDK + ビルトインMCP + カスタムMCP
+  const allTools = [...SDK_TOOLS, ...BUILTIN_MCP_TOOLS, ...customMcpTools];
+
+  // 1. init イベント
+  sse.sendSSE(res, 'init', sse.formatInitEvent(sessionId, allTools, model, conversationId));
   await sleep(randInt(100, 300));
 
   // 会話にsession_idを紐付け
@@ -326,7 +500,6 @@ async function simulateAgentStream(res, options) {
 
   // 2. 最初のテキスト応答
   // 本家: progress(type="generating") → assistant のペア
-  // ※ thinking は現在無効化されているため送信しない
   const openingText = pick(OPENING_TEXTS);
   sse.sendSSE(res, 'progress', sse.formatProgressEvent('generating', '応答を生成中です...'));
   await sleep(randInt(50, 150));
@@ -338,25 +511,26 @@ async function simulateAgentStream(res, options) {
   });
   await sleep(randInt(200, 500));
 
-  // 4. ツール使用シナリオ（1〜4回）
+  // 3. ツール使用シナリオ（1〜4回）
   const numTools = randInt(1, 4);
   const toolScenarios = [];
+  const pendingPresentFiles = []; // present_files 呼び出し待ちのファイルパス
 
   for (let i = 0; i < numTools; i++) {
     const generator = pick(SCENARIO_GENERATORS);
     const scenario = generator(conversationId);
     toolScenarios.push(scenario);
 
-    // progress イベント
+    // progress イベント (type: "tool", tool_status: "running")
     sse.sendSSE(res, 'progress', sse.formatProgressEvent(
-      'tool_start',
+      'tool',
       scenario.summary,
       { tool_use_id: scenario.toolUseId, tool_name: scenario.toolName, tool_status: 'running' }
     ));
     await sleep(randInt(100, 250));
 
-    // tool_use イベント
-    sse.sendSSE(res, 'tool_use', sse.formatToolCallEvent(
+    // tool_call イベント
+    sse.sendSSE(res, 'tool_call', sse.formatToolCallEvent(
       scenario.toolUseId,
       scenario.toolName,
       scenario.input,
@@ -374,12 +548,12 @@ async function simulateAgentStream(res, options) {
     });
     await sleep(randInt(400, 1200));
 
-    // tool_result イベント
+    // tool_result イベント (status: "completed" | "error")
     const isError = Math.random() < 0.05; // 5%の確率でエラー
     sse.sendSSE(res, 'tool_result', sse.formatToolResultEvent(
       scenario.toolUseId,
       scenario.toolName,
-      isError ? 'error' : scenario.resultStatus,
+      isError ? 'error' : 'completed',
       isError ? 'ツールの実行中にエラーが発生しました。リトライします。' : scenario.resultContent,
       isError
     ));
@@ -390,7 +564,7 @@ async function simulateAgentStream(res, options) {
       content: {
         tool_use_id: scenario.toolUseId,
         tool_name: scenario.toolName,
-        status: isError ? 'error' : 'success',
+        status: isError ? 'error' : 'completed',
       },
     });
 
@@ -406,13 +580,24 @@ async function simulateAgentStream(res, options) {
       execution_time_ms: randInt(50, 2000),
     });
 
-    // progress 完了
+    // progress 完了 (type: "tool", tool_status: "completed" or "error")
     sse.sendSSE(res, 'progress', sse.formatProgressEvent(
-      'tool_end',
+      'tool',
       scenario.resultSummary || scenario.summary,
       { tool_use_id: scenario.toolUseId, tool_name: scenario.toolName, tool_status: isError ? 'error' : 'completed' }
     ));
     await sleep(randInt(150, 400));
+
+    // ファイル作成/編集した場合、提示待ちリストに追加
+    if (!isError && scenario.createsFile && scenario.createdFilePath) {
+      pendingPresentFiles.push(scenario.createdFilePath);
+    }
+
+    // ファイルが溜まったら present_files を呼ぶ (本家: ファイル操作後に必ず提示)
+    if (pendingPresentFiles.length > 0 && (i === numTools - 1 || pendingPresentFiles.length >= 2)) {
+      await emitPresentFilesEvent(res, conversationId, sessionId, [...pendingPresentFiles]);
+      pendingPresentFiles.length = 0;
+    }
 
     // ツール間のテキスト応答（最後以外）
     if (i < numTools - 1 && Math.random() > 0.4) {
@@ -422,7 +607,7 @@ async function simulateAgentStream(res, options) {
     }
   }
 
-  // 5. サブエージェント利用（30%の確率）
+  // 4. サブエージェント利用（30%の確率）
   if (Math.random() > 0.7) {
     const sub = scenarioSubagent();
     sse.sendSSE(res, 'subagent_start', sse.formatSubagentStartEvent(
@@ -436,7 +621,7 @@ async function simulateAgentStream(res, options) {
     await sleep(randInt(200, 400));
   }
 
-  // 6. タイトル生成（新規会話時・50%の確率）
+  // 5. タイトル生成（新規会話時）
   const conv = store.getConversation(conversationId);
   if (conv && !conv.title) {
     const titles = [
@@ -455,7 +640,7 @@ async function simulateAgentStream(res, options) {
     await sleep(randInt(100, 200));
   }
 
-  // 7. 最終テキスト応答
+  // 6. 最終テキスト応答
   const closingText = pick(CLOSING_TEXTS);
   sse.sendSSE(res, 'assistant', sse.formatAssistantEvent([{ type: 'text', text: closingText }]));
   store.addMessageLog(conversationId, {
@@ -465,13 +650,13 @@ async function simulateAgentStream(res, options) {
   });
   await sleep(randInt(100, 300));
 
-  // 8. context_status イベント
+  // 7. context_status イベント
   const contextTokens = randInt(5000, 80000);
   const maxTokens = 200000;
   sse.sendSSE(res, 'context_status', sse.formatContextStatusEvent(contextTokens, maxTokens));
   store.updateConversation(conversationId, { estimated_context_tokens: contextTokens });
 
-  // 9. done イベント
+  // 8. done イベント
   const inputTokens = randInt(1000, 15000);
   const outputTokens = randInt(500, 8000);
   const cacheRead = randInt(0, 5000);
@@ -586,5 +771,6 @@ async function simulateSimpleChatStream(res, options) {
 module.exports = {
   simulateAgentStream,
   simulateSimpleChatStream,
-  AVAILABLE_TOOLS,
+  SDK_TOOLS,
+  BUILTIN_MCP_TOOLS,
 };

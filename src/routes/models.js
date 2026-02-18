@@ -32,12 +32,12 @@ router.get('/:model_id', (req, res) => {
 
 // POST /api/models - モデル作成
 router.post('/', (req, res) => {
-  const { model_id, bedrock_model_id } = req.body || {};
-  if (!model_id || !bedrock_model_id) {
+  const { model_id, display_name, bedrock_model_id } = req.body || {};
+  if (!model_id || !display_name || !bedrock_model_id) {
     return res.status(422).json({
       error: {
         code: 'VALIDATION_ERROR',
-        message: 'model_id と bedrock_model_id は必須です。',
+        message: 'model_id, display_name, bedrock_model_id は必須です。',
         request_id: req.headers['x-request-id'],
         timestamp: new Date().toISOString(),
       },
