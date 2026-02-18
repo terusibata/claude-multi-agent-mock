@@ -83,7 +83,7 @@ router.post('/stream', async (req, res) => {
     system_prompt,
     model_id,
     message,
-  } = req.body;
+  } = req.body || {};
 
   if (!message) {
     return res.status(422).json({

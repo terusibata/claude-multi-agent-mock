@@ -52,7 +52,7 @@ router.get('/:skill_id', (req, res) => {
 
 // POST /api/tenants/:tenant_id/skills - スキル作成
 router.post('/', upload.array('additional_files', 20), (req, res) => {
-  const { name, display_title, description, skill_md, slash_command, slash_command_description } = req.body;
+  const { name, display_title, description, skill_md, slash_command, slash_command_description } = req.body || {};
   if (!name || !skill_md) {
     return res.status(422).json({
       error: {
@@ -146,7 +146,8 @@ router.get('/:skill_id/files', (req, res) => {
 });
 
 // GET /api/tenants/:tenant_id/skills/:skill_id/files/:file_path - ファイル内容取得
-router.get('/:skill_id/files/:filePath(*)', (req, res) => {
+// Express 5: ワイルドカードは *name 構文（path-to-regexp v8）
+router.get('/:skill_id/files/*filePath', (req, res) => {
   const skill = store.getSkill(req.params.skill_id);
   if (!skill || skill.tenant_id !== req.params.tenant_id) {
     return res.status(404).json({

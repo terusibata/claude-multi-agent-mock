@@ -20,7 +20,7 @@ router.get('/', (req, res) => {
 
 // POST /api/tenants - テナント作成
 router.post('/', (req, res) => {
-  const { tenant_id, system_prompt, model_id } = req.body;
+  const { tenant_id, system_prompt, model_id } = req.body || {};
   if (!tenant_id) {
     return res.status(422).json({
       error: {
