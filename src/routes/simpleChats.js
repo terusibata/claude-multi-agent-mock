@@ -170,13 +170,14 @@ router.post('/stream', async (req, res) => {
       }
     }
   } catch (err) {
-    const errPayload = JSON.stringify({
-      seq: 999,
-      timestamp: new Date().toISOString(),
-      event_type: 'error',
-      message: `ストリーミング中にエラーが発生しました: ${err.message}`,
-    });
-    res.write(`event: error\ndata: ${errPayload}\n\n`);
+    // 本家: format_error_event() と同じ形式
+    const sse = require('../utils/sse');
+    const errData = sse.formatErrorEvent(
+      err.constructor.name || 'Error',
+      `ストリーミング中にエラーが発生しました: ${err.message}`,
+      false
+    );
+    sse.sendSSE(res, 'error', errData);
   }
 
   res.end();

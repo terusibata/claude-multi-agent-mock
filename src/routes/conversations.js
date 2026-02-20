@@ -238,14 +238,13 @@ router.post('/:conversation_id/stream', upload.array('files', 10), async (req, r
       userId: executor.user_id,
     });
   } catch (err) {
-    const errPayload = JSON.stringify({
-      seq: 999,
-      timestamp: new Date().toISOString(),
-      error_type: 'INTERNAL_ERROR',
-      message: `ストリーミング中にエラーが発生しました: ${err.message}`,
-      recoverable: false,
-    });
-    res.write(`event: error\ndata: ${errPayload}\n\n`);
+    // 本家: format_error_event() と同じ形式
+    const sse = require('../utils/sse');
+    sse.sendSSE(res, 'error', sse.formatErrorEvent(
+      'execution_error',
+      `ストリーミング中にエラーが発生しました: ${err.message}`,
+      false
+    ));
   }
 
   res.end();
