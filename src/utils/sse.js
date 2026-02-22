@@ -30,14 +30,26 @@ function sendSSE(res, eventType, data) {
  */
 
 function formatInitEvent(sessionId, tools, model, conversationId) {
-  return {
+  const evt = {
     seq: nextSeq(),
     timestamp: getTimestamp(),
     session_id: sessionId,
     tools,
     model,
-    conversation_id: conversationId,
   };
+  // 本家: conversation_id が truthy な場合のみ含む
+  if (conversationId) evt.conversation_id = conversationId;
+  return evt;
+}
+
+function formatThinkingEvent(content, parentAgentId) {
+  const evt = {
+    seq: nextSeq(),
+    timestamp: getTimestamp(),
+    content,
+  };
+  if (parentAgentId) evt.parent_agent_id = parentAgentId;
+  return evt;
 }
 
 function formatAssistantEvent(contentBlocks, parentAgentId) {
@@ -51,12 +63,22 @@ function formatAssistantEvent(contentBlocks, parentAgentId) {
 }
 
 function formatToolCallEvent(toolUseId, toolName, input, summary, parentAgentId) {
+  // 本家: 500文字超の文字列値を切り詰め
+  const truncatedInput = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value === 'string' && value.length > 500) {
+      truncatedInput[key] = value.slice(0, 500) + '...';
+    } else {
+      truncatedInput[key] = value;
+    }
+  }
+
   const evt = {
     seq: nextSeq(),
     timestamp: getTimestamp(),
     tool_use_id: toolUseId,
     tool_name: toolName,
-    input,
+    input: truncatedInput,
     summary,
   };
   if (parentAgentId) evt.parent_agent_id = parentAgentId;
@@ -78,25 +100,29 @@ function formatToolResultEvent(toolUseId, toolName, status, content, isError, pa
 }
 
 function formatSubagentStartEvent(agentId, agentType, description, model) {
-  return {
+  const evt = {
     seq: nextSeq(),
     timestamp: getTimestamp(),
     agent_id: agentId,
     agent_type: agentType,
     description,
-    model,
   };
+  // 本家: model が truthy な場合のみ含む
+  if (model) evt.model = model;
+  return evt;
 }
 
 function formatSubagentEndEvent(agentId, agentType, status, resultPreview) {
-  return {
+  const evt = {
     seq: nextSeq(),
     timestamp: getTimestamp(),
     agent_id: agentId,
     agent_type: agentType,
     status,
-    result_preview: resultPreview,
   };
+  // 本家: result_preview が truthy な場合のみ含む
+  if (resultPreview) evt.result_preview = resultPreview;
+  return evt;
 }
 
 function formatProgressEvent(type, message, toolInfo, parentAgentId) {
@@ -123,9 +149,10 @@ function formatTitleEvent(title) {
   };
 }
 
-function formatPingEvent(elapsedMs) {
+function formatPingEvent(seq, elapsedMs) {
+  // 本家: ping は seq=0 固定（シーケンスカウンターを使わない）
   return {
-    seq: nextSeq(),
+    seq: seq,
     timestamp: getTimestamp(),
     elapsed_ms: elapsedMs,
   };
@@ -141,19 +168,20 @@ function formatContextStatusEvent(currentTokens, maxTokens) {
   if (pct >= 95) {
     warningLevel = 'blocked';
     canContinue = false;
-    message = 'コンテキストウィンドウの上限に達しました。新しい会話を開始してください。';
+    // 本家と同一メッセージ
+    message = 'コンテキスト制限に達しました。新しいチャットを開始してください。';
     recommendedAction = 'new_chat';
   } else if (pct >= 85) {
     warningLevel = 'critical';
-    message = '会話が非常に長くなっています。次の返信でエラーの可能性があります。';
+    message = 'コンテキストが残りわずかです。次の返信でエラーの可能性があります。';
     recommendedAction = 'new_chat';
   } else if (pct >= 70) {
     warningLevel = 'warning';
-    message = '会話が長くなっています。新しいチャットの開始をお勧めします。';
+    message = '会話が長くなっています。新しいチャットを開始することをおすすめします。';
     recommendedAction = 'new_chat';
   }
 
-  return {
+  const evt = {
     seq: nextSeq(),
     timestamp: getTimestamp(),
     current_context_tokens: currentTokens,
@@ -161,18 +189,22 @@ function formatContextStatusEvent(currentTokens, maxTokens) {
     usage_percent: Math.round(pct * 10) / 10,
     warning_level: warningLevel,
     can_continue: canContinue,
-    message,
-    recommended_action: recommendedAction,
   };
+  // 本家: message, recommended_action は truthy な場合のみ含む
+  if (message) evt.message = message;
+  if (recommendedAction) evt.recommended_action = recommendedAction;
+  return evt;
 }
 
 function formatDoneEvent({ status, result, errors, usage, costUsd, turnCount, durationMs, sessionId }) {
-  return {
+  const resolvedStatus = status || 'success';
+  const evt = {
     seq: nextSeq(),
     timestamp: getTimestamp(),
-    status: status || 'success',
+    status: resolvedStatus,
     result: result || null,
-    is_error: status === 'error',
+    // 本家: is_error = status != "success" (cancelled も true になる)
+    is_error: resolvedStatus !== 'success',
     errors: errors || null,
     usage: usage || {
       input_tokens: 0,
@@ -185,8 +217,10 @@ function formatDoneEvent({ status, result, errors, usage, costUsd, turnCount, du
     cost_usd: costUsd || '0',
     turn_count: turnCount || 1,
     duration_ms: durationMs || 0,
-    session_id: sessionId || null,
   };
+  // 本家: session_id は None でない場合のみ含む
+  if (sessionId != null) evt.session_id = sessionId;
+  return evt;
 }
 
 function formatErrorEvent(errorType, message, recoverable) {
@@ -200,20 +234,21 @@ function formatErrorEvent(errorType, message, recoverable) {
 }
 
 // シンプルチャット用
+// 本家: SSEイベントタイプは "text_delta"、data に event_type フィールドは含まない
 function formatSimpleTextDeltaEvent(seq, content) {
   return {
     seq,
     timestamp: getTimestamp(),
-    event_type: 'text_delta',
     content,
   };
 }
 
+// 本家: done イベントには status フィールドがあり、event_type フィールドはない
 function formatSimpleDoneEvent(seq, { title, usage, costUsd }) {
   return {
     seq,
     timestamp: getTimestamp(),
-    event_type: 'done',
+    status: 'success',
     title: title || null,
     usage: usage || { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
     cost_usd: costUsd || '0',
@@ -226,6 +261,7 @@ module.exports = {
   getTimestamp,
   sendSSE,
   formatInitEvent,
+  formatThinkingEvent,
   formatAssistantEvent,
   formatToolCallEvent,
   formatToolResultEvent,

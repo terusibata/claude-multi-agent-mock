@@ -25,6 +25,72 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+// ========= 進捗メッセージテンプレート（本家 progress_messages.py 準拠） =========
+const PHASE_MESSAGES = {
+  thinking: [
+    '考えています...',
+    '回答を検討中...',
+    '最適な回答を考えています...',
+    '内容を分析しています...',
+    'リクエストを処理中...',
+  ],
+  generating: [
+    '回答を作成しています...',
+    'テキストを生成中...',
+    '回答を準備しています...',
+    '内容を整理しています...',
+  ],
+};
+
+const BUILTIN_TOOL_MESSAGES = {
+  Read: ['ファイルを読み込んでいます...', 'ファイル内容を取得中...'],
+  Write: ['ファイルを作成しています...', 'ファイルに書き込んでいます...'],
+  Edit: ['ファイルを編集しています...', 'コードを修正中...'],
+  Bash: ['コマンドを実行しています...', 'ターミナル処理を実行中...'],
+  Glob: ['ファイルを検索しています...', 'パターンに一致するファイルを探しています...'],
+  Grep: ['テキストを検索しています...', 'コード内を検索中...'],
+  Task: ['サブタスクを処理しています...', '並行処理を実行中...'],
+  WebFetch: ['Webページを取得しています...', 'Web情報を読み込み中...'],
+  WebSearch: ['Web検索を実行しています...', 'インターネットで情報を検索中...'],
+  TodoRead: ['タスク一覧を確認しています...'],
+  TodoWrite: ['タスクを更新しています...'],
+  NotebookEdit: ['ノートブックを編集しています...'],
+  'mcp__file-presentation__present_files': ['ファイルを提示しています...', '結果ファイルを準備中...'],
+  'mcp__file-tools__list_workspace_files': ['ワークスペースのファイル一覧を取得中...'],
+  'mcp__file-tools__read_image_file': ['画像ファイルを読み込んでいます...', '画像を分析中...'],
+  'mcp__file-tools__get_sheet_info': ['Excelファイルの構造を確認中...'],
+  'mcp__file-tools__get_sheet_csv': ['Excelデータを取得しています...', 'スプレッドシートを読み込み中...'],
+  'mcp__file-tools__inspect_pdf_file': ['PDFファイルの構造を確認中...'],
+  'mcp__file-tools__read_pdf_pages': ['PDFテキストを抽出しています...', 'PDFを読み込み中...'],
+  'mcp__file-tools__get_document_content': ['Wordテキストを取得しています...', 'ドキュメントを読み込み中...'],
+  'mcp__file-tools__get_presentation_info': ['PowerPointの構造を確認中...'],
+  'mcp__file-tools__inspect_image_file': ['画像の情報を取得しています...'],
+};
+
+const DEFAULT_MCP_MESSAGES = [
+  'MCPツールを実行しています...',
+  '外部ツールを処理中...',
+  'ツールの応答を待っています...',
+];
+
+const DEFAULT_TOOL_MESSAGES = [
+  '処理を実行しています...',
+  'ツールを実行中...',
+];
+
+/**
+ * 本家の get_initial_message() と同等のロジック
+ */
+function getToolProgressMessage(toolName) {
+  if (BUILTIN_TOOL_MESSAGES[toolName]) {
+    return pick(BUILTIN_TOOL_MESSAGES[toolName]);
+  }
+  if (toolName.startsWith('mcp__')) {
+    return pick(DEFAULT_MCP_MESSAGES);
+  }
+  return pick(DEFAULT_TOOL_MESSAGES);
+}
+
 // ========= ツール定義 =========
 // ビルトインSDKツール
 const SDK_TOOLS = [
@@ -396,25 +462,28 @@ const MIDDLE_TEXTS = [
 /**
  * ファイル作成/編集後に mcp__file-presentation__present_files を呼び出す
  * (本家の動作: ファイル操作後は必ずユーザーに提示する)
+ *
+ * 本家のフロー: SDK tool_use → progress(tool, running) + tool_call
+ *             SDK tool_result → tool_result のみ（progress(completed) なし）
  */
 async function emitPresentFilesEvent(res, conversationId, sessionId, filePaths) {
   const presentToolUseId = uuidv4();
   const toolName = 'mcp__file-presentation__present_files';
 
-  // progress (running)
+  // 本家: SDK tool_use → progress(tool, running) + tool_call
+  // progress.message は get_initial_message("tool", tool_name) からランダム選択
   sse.sendSSE(res, 'progress', sse.formatProgressEvent(
     'tool',
-    'ファイルをユーザーに提示中...',
+    getToolProgressMessage(toolName),
     { tool_use_id: presentToolUseId, tool_name: toolName, tool_status: 'running' }
   ));
   await sleep(randInt(50, 150));
 
-  // tool_call
   sse.sendSSE(res, 'tool_call', sse.formatToolCallEvent(
     presentToolUseId,
     toolName,
     { file_paths: filePaths },
-    'ファイルを提示'
+    `ツール実行: ${toolName}`
   ));
   await sleep(randInt(100, 300));
 
@@ -426,20 +495,13 @@ async function emitPresentFilesEvent(res, conversationId, sessionId, filePaths) 
     }
   }
 
-  // tool_result
+  // 本家: SDK tool_result → tool_result のみ（progress(completed) なし）
   sse.sendSSE(res, 'tool_result', sse.formatToolResultEvent(
     presentToolUseId,
     toolName,
     'completed',
     `${filePaths.length}件のファイルを提示しました: ${filePaths.join(', ')}`,
     false
-  ));
-
-  // progress (completed)
-  sse.sendSSE(res, 'progress', sse.formatProgressEvent(
-    'tool',
-    'ファイル提示完了',
-    { tool_use_id: presentToolUseId, tool_name: toolName, tool_status: 'completed' }
   ));
 
   // ツールログ
@@ -458,7 +520,28 @@ async function emitPresentFilesEvent(res, conversationId, sessionId, filePaths) 
 }
 
 /**
+ * テキスト応答を送信するヘルパー
+ * 本家: SDK text_delta ごとに progress(generating) + assistant のペアを送信
+ */
+async function emitTextResponse(res, text) {
+  // 本家: get_initial_message("generating") からランダム選択
+  sse.sendSSE(res, 'progress', sse.formatProgressEvent('generating', pick(PHASE_MESSAGES.generating)));
+  await sleep(randInt(50, 150));
+  sse.sendSSE(res, 'assistant', sse.formatAssistantEvent([{ type: 'text', text }]));
+}
+
+/**
  * メインのストリーミングシミュレーション
+ *
+ * 本家のイベントシーケンス:
+ *   progress(setup) x 2~4
+ *   init
+ *   [SDK text_delta ごとに] progress(generating) + assistant
+ *   [SDK tool_use ごとに] progress(tool, running) + tool_call
+ *   [SDK tool_result ごとに] tool_result のみ
+ *   context_status
+ *   title (初回のみ)
+ *   done
  *
  * @param {object} res - Express レスポンスオブジェクト（SSE）
  * @param {object} options - { conversationId, userInput, model, sessionId }
@@ -491,6 +574,22 @@ async function simulateAgentStream(res, options) {
   // init イベントのツール一覧: SDK + ビルトインMCP + カスタムMCP
   const allTools = [...SDK_TOOLS, ...BUILTIN_MCP_TOOLS, ...customMcpTools];
 
+  // 本家: init の前に progress(setup) イベントを 2~4 個送信
+  sse.sendSSE(res, 'progress', sse.formatProgressEvent('setup', '実行を開始しています...'));
+  await sleep(randInt(100, 250));
+
+  sse.sendSSE(res, 'progress', sse.formatProgressEvent('setup', 'ワークスペースを準備しています...'));
+  await sleep(randInt(100, 250));
+
+  // ワークスペース有効時はファイル同期メッセージも送信
+  if (Math.random() > 0.3) {
+    sse.sendSSE(res, 'progress', sse.formatProgressEvent('setup', 'ファイルを同期中...'));
+    await sleep(randInt(100, 250));
+  }
+
+  sse.sendSSE(res, 'progress', sse.formatProgressEvent('setup', 'エージェントを起動しています...'));
+  await sleep(randInt(100, 250));
+
   // 1. init イベント
   sse.sendSSE(res, 'init', sse.formatInitEvent(sessionId, allTools, model, conversationId));
   await sleep(randInt(100, 300));
@@ -499,11 +598,9 @@ async function simulateAgentStream(res, options) {
   store.updateConversation(conversationId, { session_id: sessionId });
 
   // 2. 最初のテキスト応答
-  // 本家: progress(type="generating") → assistant のペア
+  // 本家: SDK text_delta → progress(generating) + assistant のペア
   const openingText = pick(OPENING_TEXTS);
-  sse.sendSSE(res, 'progress', sse.formatProgressEvent('generating', '応答を生成中です...'));
-  await sleep(randInt(50, 150));
-  sse.sendSSE(res, 'assistant', sse.formatAssistantEvent([{ type: 'text', text: openingText }]));
+  await emitTextResponse(res, openingText);
   store.addMessageLog(conversationId, {
     message_type: 'assistant',
     message_subtype: 'text',
@@ -521,20 +618,21 @@ async function simulateAgentStream(res, options) {
     const scenario = generator(conversationId);
     toolScenarios.push(scenario);
 
-    // progress イベント (type: "tool", tool_status: "running")
+    // 本家: SDK tool_use → progress(tool, running) + tool_call
+    // progress.message は get_initial_message("tool", tool_name) からランダム選択
+    // tool_call.summary は常に "ツール実行: {tool_name}"
     sse.sendSSE(res, 'progress', sse.formatProgressEvent(
       'tool',
-      scenario.summary,
+      getToolProgressMessage(scenario.toolName),
       { tool_use_id: scenario.toolUseId, tool_name: scenario.toolName, tool_status: 'running' }
     ));
     await sleep(randInt(100, 250));
 
-    // tool_call イベント
     sse.sendSSE(res, 'tool_call', sse.formatToolCallEvent(
       scenario.toolUseId,
       scenario.toolName,
       scenario.input,
-      scenario.summary
+      `ツール実行: ${scenario.toolName}`
     ));
 
     store.addMessageLog(conversationId, {
@@ -548,7 +646,7 @@ async function simulateAgentStream(res, options) {
     });
     await sleep(randInt(400, 1200));
 
-    // tool_result イベント (status: "completed" | "error")
+    // 本家: SDK tool_result → tool_result のみ（progress(completed) なし）
     const isError = Math.random() < 0.05; // 5%の確率でエラー
     sse.sendSSE(res, 'tool_result', sse.formatToolResultEvent(
       scenario.toolUseId,
@@ -579,13 +677,6 @@ async function simulateAgentStream(res, options) {
       status: isError ? 'error' : 'completed',
       execution_time_ms: randInt(50, 2000),
     });
-
-    // progress 完了 (type: "tool", tool_status: "completed" or "error")
-    sse.sendSSE(res, 'progress', sse.formatProgressEvent(
-      'tool',
-      scenario.resultSummary || scenario.summary,
-      { tool_use_id: scenario.toolUseId, tool_name: scenario.toolName, tool_status: isError ? 'error' : 'completed' }
-    ));
     await sleep(randInt(150, 400));
 
     // ファイル作成/編集した場合、提示待ちリストに追加
@@ -600,9 +691,10 @@ async function simulateAgentStream(res, options) {
     }
 
     // ツール間のテキスト応答（最後以外）
+    // 本家: SDK text_delta ごとに progress(generating) + assistant のペア
     if (i < numTools - 1 && Math.random() > 0.4) {
       const middleText = pick(MIDDLE_TEXTS);
-      sse.sendSSE(res, 'assistant', sse.formatAssistantEvent([{ type: 'text', text: middleText }]));
+      await emitTextResponse(res, middleText);
       await sleep(randInt(150, 350));
     }
   }
@@ -621,7 +713,35 @@ async function simulateAgentStream(res, options) {
     await sleep(randInt(200, 400));
   }
 
-  // 5. タイトル生成（新規会話時）
+  // 5. thinking イベント（10%の確率で発生、Extended Thinking 有効時のシミュレーション）
+  if (Math.random() > 0.9) {
+    // 本家: get_initial_message("thinking") からランダム選択
+    sse.sendSSE(res, 'progress', sse.formatProgressEvent('thinking', pick(PHASE_MESSAGES.thinking)));
+    await sleep(randInt(50, 150));
+    sse.sendSSE(res, 'thinking', sse.formatThinkingEvent(
+      'ユーザーの要望を整理し、最適な回答方法を検討中です。提供された情報を元に、包括的な回答を構築します。'
+    ));
+    await sleep(randInt(200, 400));
+  }
+
+  // 6. 最終テキスト応答
+  // 本家: SDK text_delta → progress(generating) + assistant のペア
+  const closingText = pick(CLOSING_TEXTS);
+  await emitTextResponse(res, closingText);
+  store.addMessageLog(conversationId, {
+    message_type: 'assistant',
+    message_subtype: 'text',
+    content: { text: closingText },
+  });
+  await sleep(randInt(100, 300));
+
+  // 7. context_status イベント（本家: done の直前に送信）
+  const contextTokens = randInt(5000, 80000);
+  const maxTokens = 200000;
+  sse.sendSSE(res, 'context_status', sse.formatContextStatusEvent(contextTokens, maxTokens));
+  store.updateConversation(conversationId, { estimated_context_tokens: contextTokens });
+
+  // 8. タイトル生成（本家: done の直前、context_status の後に送信）
   const conv = store.getConversation(conversationId);
   if (conv && !conv.title) {
     const titles = [
@@ -640,23 +760,7 @@ async function simulateAgentStream(res, options) {
     await sleep(randInt(100, 200));
   }
 
-  // 6. 最終テキスト応答
-  const closingText = pick(CLOSING_TEXTS);
-  sse.sendSSE(res, 'assistant', sse.formatAssistantEvent([{ type: 'text', text: closingText }]));
-  store.addMessageLog(conversationId, {
-    message_type: 'assistant',
-    message_subtype: 'text',
-    content: { text: closingText },
-  });
-  await sleep(randInt(100, 300));
-
-  // 7. context_status イベント
-  const contextTokens = randInt(5000, 80000);
-  const maxTokens = 200000;
-  sse.sendSSE(res, 'context_status', sse.formatContextStatusEvent(contextTokens, maxTokens));
-  store.updateConversation(conversationId, { estimated_context_tokens: contextTokens });
-
-  // 8. done イベント
+  // 9. done イベント
   const inputTokens = randInt(1000, 15000);
   const outputTokens = randInt(500, 8000);
   const cacheRead = randInt(0, 5000);
@@ -709,6 +813,10 @@ async function simulateAgentStream(res, options) {
 /**
  * シンプルチャット用ストリーミング
  * ツール使用なし、テキストのみ
+ *
+ * 本家のフロー:
+ *   event: text_delta → data: {"seq": N, "timestamp": "...", "content": "..."}
+ *   event: done → data: {"seq": N, "timestamp": "...", "status": "success", "title": "...", "usage": {...}, "cost_usd": "..."}
  */
 async function simulateSimpleChatStream(res, options) {
   const { chatId, message, applicationContext } = options;
@@ -749,8 +857,9 @@ async function simulateSimpleChatStream(res, options) {
   for (const chunk of chunks) {
     seq++;
     fullText += chunk;
+    // 本家: SSE イベントタイプは text_delta（message ではない）
     const payload = JSON.stringify(sse.formatSimpleTextDeltaEvent(seq, chunk));
-    res.write(`event: message\ndata: ${payload}\n\n`);
+    res.write(`event: text_delta\ndata: ${payload}\n\n`);
     await sleep(randInt(80, 250));
   }
 
