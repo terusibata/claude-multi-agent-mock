@@ -57,20 +57,9 @@ const BUILTIN_TOOL_MESSAGES = {
   NotebookEdit: ['ノートブックを編集しています...'],
   'mcp__file-presentation__present_files': ['ファイルを提示しています...', '結果ファイルを準備中...'],
   'mcp__file-tools__list_workspace_files': ['ワークスペースのファイル一覧を取得中...'],
-  'mcp__file-tools__read_image_file': ['画像ファイルを読み込んでいます...', '画像を分析中...'],
-  'mcp__file-tools__get_sheet_info': ['Excelファイルの構造を確認中...'],
-  'mcp__file-tools__get_sheet_csv': ['Excelデータを取得しています...', 'スプレッドシートを読み込み中...'],
-  'mcp__file-tools__search_workbook': ['Excelブック内を検索しています...', 'ワークブックを検索中...'],
-  'mcp__file-tools__inspect_pdf_file': ['PDFファイルの構造を確認中...'],
-  'mcp__file-tools__read_pdf_pages': ['PDFテキストを抽出しています...', 'PDFを読み込み中...'],
-  'mcp__file-tools__convert_pdf_to_images': ['PDFを画像に変換しています...', 'PDF画像化処理中...'],
-  'mcp__file-tools__get_document_info': ['Wordファイルの構造を確認中...'],
-  'mcp__file-tools__get_document_content': ['Wordテキストを取得しています...', 'ドキュメントを読み込み中...'],
-  'mcp__file-tools__search_document': ['ドキュメント内を検索しています...', 'Word文書を検索中...'],
-  'mcp__file-tools__get_presentation_info': ['PowerPointの構造を確認中...'],
-  'mcp__file-tools__get_slides_content': ['PowerPointスライドを読み込んでいます...', 'プレゼンテーションを処理中...'],
-  'mcp__file-tools__search_presentation': ['プレゼンテーション内を検索しています...', 'PowerPoint内を検索中...'],
-  'mcp__file-tools__inspect_image_file': ['画像の情報を取得しています...'],
+  'mcp__file-tools__read_image_file': ['画像を分析中...', '画像の内容を読み取っています...'],
+  // 本家: 上記以外の mcp__file-tools__ ツールは BUILTIN_TOOL_MESSAGES に登録されておらず、
+  // DEFAULT_MCP_MESSAGES にフォールバックするため、ここには追加しない
 };
 
 const DEFAULT_MCP_MESSAGES = [
@@ -101,7 +90,7 @@ function getToolProgressMessage(toolName) {
 // ビルトインSDKツール
 const SDK_TOOLS = [
   'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep',
-  'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
+  'WebFetch', 'WebSearch', 'Task', 'TodoWrite', 'NotebookEdit',
 ];
 
 // ビルトインMCPサーバーツール (mcp__server__tool 形式)
@@ -587,12 +576,7 @@ async function simulateAgentStream(res, options) {
   sse.sendSSE(res, 'progress', sse.formatProgressEvent('setup', 'ワークスペースを準備しています...'));
   await sleep(randInt(100, 250));
 
-  // ワークスペース有効時はファイル同期メッセージも送信
-  if (Math.random() > 0.3) {
-    sse.sendSSE(res, 'progress', sse.formatProgressEvent('setup', 'ファイルを同期中...'));
-    await sleep(randInt(100, 250));
-  }
-
+  // 本家: setup メッセージは3個固定（実行開始 / ワークスペース準備 / エージェント起動）
   sse.sendSSE(res, 'progress', sse.formatProgressEvent('setup', 'エージェントを起動しています...'));
   await sleep(randInt(100, 250));
 
@@ -784,6 +768,18 @@ async function simulateAgentStream(res, options) {
 
   const costUsd = ((inputTokens * 0.003 + outputTokens * 0.015 + cacheRead * 0.0003 + cache5m * 0.00375) / 1000).toFixed(6);
 
+  // 本家: SDK done イベントに model_usage が含まれる場合がある
+  const modelUsage = {
+    [model]: {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cache_creation_5m_tokens: cache5m,
+      cache_creation_1h_tokens: 0,
+      cache_read_tokens: cacheRead,
+      total_tokens: inputTokens + outputTokens + cacheRead + cache5m,
+    },
+  };
+
   sse.sendSSE(res, 'done', sse.formatDoneEvent({
     status: 'success',
     result: closingText,
@@ -792,6 +788,7 @@ async function simulateAgentStream(res, options) {
     turnCount: numTools + 1,
     durationMs,
     sessionId,
+    modelUsage,
   }));
 
   // トークン数を会話に反映

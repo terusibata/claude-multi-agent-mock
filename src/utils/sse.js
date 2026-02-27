@@ -196,7 +196,7 @@ function formatContextStatusEvent(currentTokens, maxTokens) {
   return evt;
 }
 
-function formatDoneEvent({ status, result, errors, usage, costUsd, turnCount, durationMs, sessionId }) {
+function formatDoneEvent({ status, result, errors, usage, costUsd, turnCount, durationMs, sessionId, messages, modelUsage }) {
   const resolvedStatus = status || 'success';
   const evt = {
     seq: nextSeq(),
@@ -220,6 +220,10 @@ function formatDoneEvent({ status, result, errors, usage, costUsd, turnCount, du
   };
   // 本家: session_id は None でない場合のみ含む
   if (sessionId != null) evt.session_id = sessionId;
+  // 本家: messages は None でない場合のみ含む
+  if (messages != null) evt.messages = messages;
+  // 本家: model_usage は None でない場合のみ含む
+  if (modelUsage != null) evt.model_usage = modelUsage;
   return evt;
 }
 
