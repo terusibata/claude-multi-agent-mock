@@ -27,6 +27,7 @@ function authMiddleware(req, res, next) {
       error: {
         code: 'UNAUTHORIZED',
         message: 'APIキーが提供されていません。X-API-Key ヘッダーを指定してください。',
+        details: null,
         request_id: req.headers['x-request-id'],
         timestamp: new Date().toISOString(),
       },

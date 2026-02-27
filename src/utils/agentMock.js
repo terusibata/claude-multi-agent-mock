@@ -90,7 +90,7 @@ function getToolProgressMessage(toolName) {
 // ビルトインSDKツール
 const SDK_TOOLS = [
   'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep',
-  'WebFetch', 'WebSearch', 'Task', 'TodoWrite', 'NotebookEdit',
+  'WebFetch', 'WebSearch', 'Task', 'TodoRead', 'TodoWrite', 'NotebookEdit',
 ];
 
 // ビルトインMCPサーバーツール (mcp__server__tool 形式)
