@@ -4,6 +4,7 @@
  */
 const { Router } = require('express');
 const store = require('../store');
+const { createErrorResponse } = require('../utils/errorResponse');
 
 const router = Router({ mergeParams: true });
 
@@ -90,14 +91,7 @@ router.get('/usage/summary', (req, res) => {
 router.get('/cost-report', (req, res) => {
   const { from_date, to_date, model_id, user_id } = req.query;
   if (!from_date || !to_date) {
-    return res.status(422).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'from_date と to_date は必須です。',
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(422).json(createErrorResponse(req, 'VALIDATION_ERROR', 'from_date と to_date は必須です。'));
   }
 
   let logs = store.listUsageLogs(req.params.tenant_id, { from_date, to_date, limit: 10000 });

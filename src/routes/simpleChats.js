@@ -5,6 +5,7 @@
 const { Router } = require('express');
 const store = require('../store');
 const { simulateSimpleChatStream } = require('../utils/agentMock');
+const { createErrorResponse } = require('../utils/errorResponse');
 
 const router = Router({ mergeParams: true });
 
@@ -25,14 +26,7 @@ router.get('/', (req, res) => {
 router.get('/:chat_id', (req, res) => {
   const chat = store.getSimpleChat(req.params.chat_id);
   if (!chat || chat.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `チャット ${req.params.chat_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `チャット ${req.params.chat_id} が見つかりません。`));
   }
   const messages = store.getSimpleChatMessages(req.params.chat_id);
   res.json({ ...chat, messages });
@@ -42,14 +36,7 @@ router.get('/:chat_id', (req, res) => {
 router.post('/:chat_id/archive', (req, res) => {
   const chat = store.getSimpleChat(req.params.chat_id);
   if (!chat || chat.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `チャット ${req.params.chat_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `チャット ${req.params.chat_id} が見つかりません。`));
   }
   const updated = store.simpleChats.get(req.params.chat_id);
   updated.status = 'archived';
@@ -61,14 +48,7 @@ router.post('/:chat_id/archive', (req, res) => {
 router.delete('/:chat_id', (req, res) => {
   const chat = store.getSimpleChat(req.params.chat_id);
   if (!chat || chat.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `チャット ${req.params.chat_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `チャット ${req.params.chat_id} が見つかりません。`));
   }
   store.deleteSimpleChat(req.params.chat_id);
   res.status(204).end();
@@ -86,14 +66,7 @@ router.post('/stream', async (req, res) => {
   } = req.body || {};
 
   if (!message) {
-    return res.status(422).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'message は必須です。',
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(422).json(createErrorResponse(req, 'VALIDATION_ERROR', 'message は必須です。'));
   }
 
   let chat;
@@ -102,26 +75,12 @@ router.post('/stream', async (req, res) => {
   if (chat_id) {
     chat = store.getSimpleChat(chat_id);
     if (!chat || chat.tenant_id !== req.params.tenant_id) {
-      return res.status(404).json({
-        error: {
-          code: 'NOT_FOUND',
-          message: `チャット ${chat_id} が見つかりません。`,
-          request_id: req.headers['x-request-id'],
-          timestamp: new Date().toISOString(),
-        },
-      });
+      return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `チャット ${chat_id} が見つかりません。`));
     }
   } else {
     // 新規チャット作成
     if (!user_id || !application_type || !model_id) {
-      return res.status(422).json({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: '新規チャットの場合、user_id, application_type, model_id は必須です。',
-          request_id: req.headers['x-request-id'],
-          timestamp: new Date().toISOString(),
-        },
-      });
+      return res.status(422).json(createErrorResponse(req, 'VALIDATION_ERROR', '新規チャットの場合、user_id, application_type, model_id は必須です。'));
     }
     chat = store.createSimpleChat({
       tenant_id: req.params.tenant_id,

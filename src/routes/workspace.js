@@ -6,6 +6,7 @@ const { Router } = require('express');
 const path = require('path');
 const store = require('../store');
 const { getSampleFile } = require('../utils/sampleFiles');
+const { createErrorResponse } = require('../utils/errorResponse');
 
 const router = Router({ mergeParams: true });
 
@@ -13,14 +14,7 @@ const router = Router({ mergeParams: true });
 router.get('/:conversation_id/files', (req, res) => {
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
 
   // 本家: WorkspaceFileList = { conversation_id, files: [ConversationFileInfo], total_count, total_size }
@@ -38,39 +32,18 @@ router.get('/:conversation_id/files', (req, res) => {
 router.get('/:conversation_id/files/download', (req, res) => {
   const { path: filePath } = req.query;
   if (!filePath) {
-    return res.status(422).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'path クエリパラメータは必須です。',
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(422).json(createErrorResponse(req, 'VALIDATION_ERROR', 'path クエリパラメータは必須です。'));
   }
 
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
 
   // パストラバーサル防止
   const normalized = path.normalize(filePath).replace(/^(\.\.[/\\])+/, '');
   if (normalized !== filePath && !filePath.startsWith('/')) {
-    return res.status(403).json({
-      error: {
-        code: 'FORBIDDEN',
-        message: '不正なファイルパスです。',
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(403).json(createErrorResponse(req, 'FORBIDDEN', '不正なファイルパスです。'));
   }
 
   const file = store.getConversationFile(req.params.conversation_id, filePath);
@@ -103,14 +76,7 @@ router.get('/:conversation_id/files/download', (req, res) => {
 router.get('/:conversation_id/files/presented', (req, res) => {
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
 
   // 本家: PresentedFileList = { conversation_id, files: [ConversationFileInfo] }

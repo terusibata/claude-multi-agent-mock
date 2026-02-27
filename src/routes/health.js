@@ -18,9 +18,7 @@ router.get('/', (req, res) => {
     timestamp: new Date().toISOString(),
     checks: {
       database: { status: 'healthy', message: null, latency_ms: 1.2 },
-      redis: { status: 'healthy', message: null, latency_ms: 0.5 },
       s3: { status: 'healthy', message: null, latency_ms: 2.1 },
-      container_system: { status: 'healthy', message: 'WarmPool: 3コンテナ待機中', latency_ms: 0.8 },
     },
   });
 });

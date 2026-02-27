@@ -99,6 +99,7 @@ app.use((req, res) => {
     error: {
       code: 'NOT_FOUND',
       message: `エンドポイント ${req.method} ${req.path} は存在しません。`,
+      details: null,
       request_id: req.headers['x-request-id'] || null,
       timestamp: new Date().toISOString(),
     },
@@ -112,6 +113,7 @@ app.use((err, req, res, _next) => {
     error: {
       code: 'INTERNAL_ERROR',
       message: 'サーバー内部エラーが発生しました。',
+      details: null,
       request_id: req.headers['x-request-id'] || null,
       timestamp: new Date().toISOString(),
     },

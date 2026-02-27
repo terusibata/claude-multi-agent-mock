@@ -7,6 +7,7 @@ const multer = require('multer');
 const store = require('../store');
 const { simulateAgentStream } = require('../utils/agentMock');
 const { getSampleFile } = require('../utils/sampleFiles');
+const { createErrorResponse } = require('../utils/errorResponse');
 
 const router = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage() });
@@ -29,25 +30,11 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const { user_id, model_id, workspace_enabled } = req.body || {};
   if (!user_id) {
-    return res.status(422).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'user_id は必須です。',
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(422).json(createErrorResponse(req, 'VALIDATION_ERROR', 'user_id は必須です。'));
   }
   const tenant = store.getTenant(req.params.tenant_id);
   if (!tenant) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `テナント ${req.params.tenant_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `テナント ${req.params.tenant_id} が見つかりません。`));
   }
   const conv = store.createConversation({
     tenant_id: req.params.tenant_id,
@@ -70,14 +57,7 @@ router.post('/', (req, res) => {
 router.get('/:conversation_id', (req, res) => {
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
   res.json(conv);
 });
@@ -86,14 +66,7 @@ router.get('/:conversation_id', (req, res) => {
 router.put('/:conversation_id', (req, res) => {
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
   const { title, status } = req.body || {};
   const updated = store.updateConversation(req.params.conversation_id, { title, status });
@@ -104,14 +77,7 @@ router.put('/:conversation_id', (req, res) => {
 router.post('/:conversation_id/archive', (req, res) => {
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
   const updated = store.updateConversation(req.params.conversation_id, { status: 'archived' });
   res.json(updated);
@@ -121,14 +87,7 @@ router.post('/:conversation_id/archive', (req, res) => {
 router.delete('/:conversation_id', (req, res) => {
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
   store.deleteConversation(req.params.conversation_id);
   res.status(204).end();
@@ -138,14 +97,7 @@ router.delete('/:conversation_id', (req, res) => {
 router.get('/:conversation_id/messages', (req, res) => {
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
   const messages = store.getMessageLogs(req.params.conversation_id);
   res.json(messages);
@@ -155,14 +107,7 @@ router.get('/:conversation_id/messages', (req, res) => {
 router.post('/:conversation_id/stream', upload.array('files', 10), async (req, res) => {
   const conv = store.getConversation(req.params.conversation_id);
   if (!conv || conv.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `会話 ${req.params.conversation_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `会話 ${req.params.conversation_id} が見つかりません。`));
   }
 
   // multipart/form-data から request_data をパース
@@ -170,26 +115,12 @@ router.post('/:conversation_id/stream', upload.array('files', 10), async (req, r
   try {
     requestData = JSON.parse(req.body.request_data || '{}');
   } catch {
-    return res.status(422).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'request_data のJSONパースに失敗しました。',
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(422).json(createErrorResponse(req, 'VALIDATION_ERROR', 'request_data のJSONパースに失敗しました。'));
   }
 
   const { user_input, executor } = requestData;
   if (!user_input || !executor) {
-    return res.status(422).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'user_input と executor は必須です。',
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(422).json(createErrorResponse(req, 'VALIDATION_ERROR', 'user_input と executor は必須です。'));
   }
 
   // アップロードファイルをワークスペースに追加

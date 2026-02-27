@@ -4,6 +4,7 @@
  */
 const { Router } = require('express');
 const store = require('../store');
+const { createErrorResponse } = require('../utils/errorResponse');
 
 const router = Router({ mergeParams: true });
 
@@ -18,33 +19,11 @@ router.get('/', (req, res) => {
   res.json(result);
 });
 
-// GET /api/tenants/:tenant_id/mcp-servers/builtin - ビルトインMCPサーバー
-router.get('/builtin', (req, res) => {
-  res.json({
-    builtin_servers: [
-      {
-        name: 'file-tools',
-        display_name: 'ファイル操作ツール',
-        description: 'ワークスペース内のファイル読み取り・書き込み・編集・削除',
-        tools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash'],
-        status: 'active',
-      },
-    ],
-  });
-});
-
 // GET /api/tenants/:tenant_id/mcp-servers/:server_id - MCP取得
 router.get('/:server_id', (req, res) => {
   const server = store.getMcpServer(req.params.server_id);
   if (!server || server.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `MCPサーバー ${req.params.server_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `MCPサーバー ${req.params.server_id} が見つかりません。`));
   }
   res.json(server);
 });
@@ -53,14 +32,7 @@ router.get('/:server_id', (req, res) => {
 router.post('/', (req, res) => {
   const { name, openapi_spec } = req.body || {};
   if (!name || !openapi_spec) {
-    return res.status(422).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'name と openapi_spec は必須です。',
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(422).json(createErrorResponse(req, 'VALIDATION_ERROR', 'name と openapi_spec は必須です。'));
   }
   const server = store.createMcpServer(req.params.tenant_id, req.body);
   res.status(201).json(server);
@@ -70,14 +42,7 @@ router.post('/', (req, res) => {
 router.put('/:server_id', (req, res) => {
   const server = store.getMcpServer(req.params.server_id);
   if (!server || server.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `MCPサーバー ${req.params.server_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `MCPサーバー ${req.params.server_id} が見つかりません。`));
   }
   const updated = store.updateMcpServer(req.params.server_id, req.body);
   res.json(updated);
@@ -87,14 +52,7 @@ router.put('/:server_id', (req, res) => {
 router.delete('/:server_id', (req, res) => {
   const server = store.getMcpServer(req.params.server_id);
   if (!server || server.tenant_id !== req.params.tenant_id) {
-    return res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: `MCPサーバー ${req.params.server_id} が見つかりません。`,
-        request_id: req.headers['x-request-id'],
-        timestamp: new Date().toISOString(),
-      },
-    });
+    return res.status(404).json(createErrorResponse(req, 'NOT_FOUND', `MCPサーバー ${req.params.server_id} が見つかりません。`));
   }
   store.deleteMcpServer(req.params.server_id);
   res.status(204).end();
